@@ -9,24 +9,28 @@ NTFY_URL = "https://ntfy.sh/" + NTFY_TOPIC
 
 # default LifeAgent param
 def notify(message: str, title: str = "LifeAgent"):
-    # turned into a try block in case ntfy.sh is down, so we don't have a forever running attempt
+    # new logic to strip title if it contains emojis
+    headers = {}
     try: 
-        # just in case the emoji breaks logic
-        safe_title = title.encode("latin-1", errors="replace").decode("latin-1")
+        title.encode("latin-1")
+        headers["Title"] = title
+    except UnicodeEncodeError:
+        pass # omit title if it cant be encoded safely
+
+    try:
         response = requests.post(
     # http post, convert to what http needs [bytes] w header for title on phone
             NTFY_URL,
             data=message.encode("utf-8"),
-            headers={"Title": safe_title},
+            headers=headers,
             timeout=10
         )
         response.raise_for_status()
-    except requests.exceptions.RequestException:
-        print("ntfy delivery failed, check network or topic configuration")
-    except Exception:
-        print("ntfy delivery failed, unexpected error encoding notification")
+    # went back to original way of catching and displaying errors w/o exposing secrets
+    except requests.exceptions.RequestException as e:
+        print(f"ntfy delivery failed: {type(e).__name__}")
 
 
 # only demo if someone runs it by itself
 if __name__ == "__main__":
-    notify("lifeagent ntfy module working!", title="test 🤪")
+    notify("lifeagent ntfy module working!", title="test")
