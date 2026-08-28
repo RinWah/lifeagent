@@ -26,16 +26,25 @@ def get_calendar_service():
 
 def get_todays_events():
     service = get_calendar_service()
-    now = datetime.now(timezone.utc).isoformat()
-    today_end = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59).isoformat()
-    events_result = service.events().list(
-        calendarId="primary",
-        timeMin=now,
-        timeMax=today_end,
-        singleEvents=True,
-        orderBy="startTime"
-    ).execute()
-    return events_result.get("items", [])
+    today = datetime.now(timezone.utc).date()
+    time_min = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+    time_max = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc).isoformat()
+    
+    calendars = service.calendarList().list().execute()
+    all_events = []
+    
+    for cal in calendars.get("items", []):
+        cal_id = cal["id"]
+        result = service.events().list(
+            calendarId=cal_id,
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            orderBy="startTime"
+        ).execute()
+        all_events.extend(result.get("items", []))
+    
+    return all_events
 
 if __name__ == "__main__":
     events = get_todays_events()
