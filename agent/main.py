@@ -1,44 +1,65 @@
 import os
 import time
 from datetime import datetime
-from ntfy import notify
-from calendar_tool import get_todays_events
 
-# --- Routine config ---
+def notify_safe(message, title="LifeAgent"):
+    try:
+        from ntfy import notify
+        notify(message, title=title)
+        return True
+    except Exception as e:
+        print(f"Notify failed: {type(e).__name__}")
+        return False
+
 ROUTINES = {
-    "meds": {"time": "08:00", "message": "Time to take your meds! 💊", "title": "Meds Reminder"},
-    "sleep": {"time": "23:00", "message": "Bedtime soon — start winding down 🌙", "title": "Sleep Reminder"},
-    "laundry": {"duration_minutes": 45, "message": "Laundry's done! 🧺", "title": "Laundry Done"},
+    "meds": {"time": "08:00", "message": "Time to take your meds!", "title": "Meds Reminder"},
+    "sleep": {"time": "23:00", "message": "Bedtime soon — wind down", "title": "Sleep Reminder"},
 }
+
+last_reminder_sent = {}
+last_calendar_check = None
 
 def check_meds():
     now = datetime.now().strftime("%H:%M")
-    if now == ROUTINES["meds"]["time"]:
-        notify(ROUTINES["meds"]["message"], title=ROUTINES["meds"]["title"])
-        print(f"[{now}] Meds reminder sent.")
+    key = "meds_" + now[:10]
+    if now == ROUTINES["meds"]["time"] and key not in last_reminder_sent:
+        sent = notify_safe(ROUTINES["meds"]["message"], title=ROUTINES["meds"]["title"])
+        if sent:
+            last_reminder_sent[key] = True
+            print(f"[{now}] Meds reminder sent.")
+        else:
+            print(f"[{now}] Meds reminder FAILED.")
 
 def check_sleep():
     now = datetime.now().strftime("%H:%M")
-    if now == ROUTINES["sleep"]["time"]:
-        notify(ROUTINES["sleep"]["message"], title=ROUTINES["sleep"]["title"])
-        print(f"[{now}] Sleep reminder sent.")
+    key = "sleep_" + now[:10]
+    if now == ROUTINES["sleep"]["time"] and key not in last_reminder_sent:
+        sent = notify_safe(ROUTINES["sleep"]["message"], title=ROUTINES["sleep"]["title"])
+        if sent:
+            last_reminder_sent[key] = True
+            print(f"[{now}] Sleep reminder sent.")
+        else:
+            print(f"[{now}] Sleep reminder FAILED.")
 
 def check_calendar():
-    events = get_todays_events()
-    if not events:
-        print("No events today.")
+    global last_calendar_check
+    today = datetime.now().date()
+    if last_calendar_check == today:
         return
-    for event in events:
-        start = event["start"].get("dateTime", event["start"].get("date"))
-        summary = event.get("summary", "No title")
-        notify(f"{start}: {summary}", title="Upcoming Class")
-        print(f"Calendar event: {start} - {summary}")
-
-def start_laundry_timer():
-    minutes = ROUTINES["laundry"]["duration_minutes"]
-    print(f"Laundry timer started for {minutes} minutes.")
-    time.sleep(minutes * 60)
-    notify(ROUTINES["laundry"]["message"], title=ROUTINES["laundry"]["title"])
+    try:
+        from calendar_tool import get_todays_events
+        events = get_todays_events()
+        last_calendar_check = today
+        if not events:
+            print("No events today.")
+            return
+        for event in events:
+            start = event["start"].get("dateTime", event["start"].get("date"))
+            summary = event.get("summary", "No title")
+            notify_safe(f"{start}: {summary}", title="Today's Schedule")
+            print(f"Calendar event: {start} - {summary}")
+    except Exception as e:
+        print(f"Calendar check failed: {type(e).__name__} — reminders still active")
 
 def run_agent():
     print("LifeAgent started.")
@@ -46,7 +67,10 @@ def run_agent():
     while True:
         check_meds()
         check_sleep()
-        time.sleep(60)
+        now_minute = datetime.now().strftime("%H:%M")
+        if now_minute == "00:01":
+            check_calendar()
+        time.sleep(55)
 
 if __name__ == "__main__":
     run_agent()
